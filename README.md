@@ -1,8 +1,6 @@
-# RZilla: FTP, SFTP & WebDAV
+# Push & Pull: FTP & SFTP File Transfer
 
-Previously known as Push & Pull.
-
-**RZilla is an FTP, SFTP and WebDAV extension for Visual Studio Code and JetBrains IDEs.** Upload, download, sync folders and compare local and remote files directly from your desktop IDE. Powered by rclone, with support for other cloud storage services.
+**Push & Pull is an SFTP, FTP and WebDAV client for Visual Studio Code and JetBrains IDEs.** Upload, download, sync folders and compare local and remote files directly from your desktop IDE. Powered by rclone, with support for other cloud storage services.
 
 ## What You Can Do
 
@@ -16,11 +14,21 @@ Previously known as Push & Pull.
 - See live transfer progress inside the editor.
 - Connect to FTP, SFTP, WebDAV, S3, and many other services supported by rclone.
 
-RZilla uses rclone for the actual file transfers. You only need to describe your server once in an `rclone.conf` file inside your project.
+Push & Pull uses rclone for the actual file transfers. You only need to describe your server once in an `rclone.conf` file inside your project.
 
-## 1. Install rclone
+## 1. Set up rclone
 
-Install rclone yourself using your preferred method. Both the VS Code and JetBrains extensions run `rclone` from your system's `PATH`. You manage its installation and updates.
+### VS Code
+
+Push & Pull downloads rclone automatically on the first transfer, comparison or sync that needs it. An internet connection is required for this first download. The executable is stored in VS Code's private extension storage and reused on later runs. You do not need to install rclone manually to transfer files.
+
+This private copy is not added to your terminal's `PATH`. To use the `rclone config` wizard below, install the rclone command-line tool separately using the instructions below. Alternatively, create `rclone.conf` manually using the FTP example in section 2.
+
+### JetBrains
+
+The JetBrains plugin uses rclone from your system's `PATH`. Install it using your preferred method and manage its updates yourself.
+
+### Command-line installation
 
 The [official installation guide](https://rclone.org/install/) documents these options:
 
@@ -52,9 +60,9 @@ sudo -v ; curl https://rclone.org/install.sh | sudo bash
 
 You can also install a binary or package for your system from the [official downloads](https://rclone.org/downloads/).
 
-After installing rclone, fully close and restart VS Code or your JetBrains IDE so it receives the updated `PATH` and can detect rclone. Run `rclone version` in the environment where the extension runs to confirm availability. For cloud or remote IDEs, install rclone in that remote environment.
+After installing the command-line tool, restart your editor and open a new integrated terminal so it receives the updated `PATH`. Run `rclone version` there before using the configuration wizard. If you work in a remote environment, run the wizard in the environment containing your project.
 
-If rclone is unavailable, transfers and password generation show: `rclone not found. Please install rclone first on your system.`
+For VS Code transfers, the extension uses its own downloaded copy of rclone. Installing the command-line tool does not replace that private copy.
 
 ## 2. Configure your project
 
@@ -73,11 +81,11 @@ The relative path `./rclone.conf` refers to the terminal's current directory. Th
 1. Choose `n` to create a remote and name it `my-server` (or another name you prefer).
 2. Select your storage type, such as FTP, SFTP, WebDAV, Google Drive or S3, and follow the authentication prompts. For services such as Google Drive, follow rclone's browser authorization instructions when prompted.
 3. Create another remote named **`my-project`**, select **`alias`** as its storage type, and set its `remote` destination to your connection and target folder, for example `my-server:/httpdocs` for FTP, `my-server:Deploy` for Google Drive, or `my-server:my-bucket/deploy` for S3.
-4. Save the configuration and quit the menu. RZilla uses `my-project:` as the destination for Push, Pull, Compare and Sync.
+4. Save the configuration and quit the menu. Push & Pull uses `my-project:` as the destination for Push, Pull, Compare and Sync.
 
 Use the same `--config ./rclone.conf` argument whenever you edit these project connections. You can also supply an absolute path if your terminal is in another directory. See the [official rclone configuration guide](https://rclone.org/docs/#configure).
 
-Rclone handles passwords and authentication tokens during setup. The optional RZilla `pass-visible` field described below is not needed when you configure credentials through this wizard.
+Rclone handles passwords and authentication tokens during setup. The optional Push & Pull `pass-visible` field described below is not needed when you configure credentials through this wizard.
 
 ### Manual File Creation (Unofficial Alternative)
 
@@ -97,9 +105,9 @@ remote = my-server:/httpdocs
 
 Replace the host, username, password and destination folder with your server details. For other connection types, use `rclone config` to get the appropriate settings.
 
-The optional `pass-visible` field is supported by RZilla in both VS Code and JetBrains. When preparing a transfer, RZilla uses `rclone obscure` to create or update `pass` from this value.
+The optional `pass-visible` field is supported by Push & Pull in both VS Code and JetBrains. When preparing a transfer, Push & Pull uses `rclone obscure` to create or update `pass` from this value.
 
-After the first successful run creates `pass`, you can remove `pass-visible` and keep the generated `pass` line. RZilla never removes `pass-visible` automatically. Without it, the existing `pass` is used unchanged. You can also supply an existing rclone `pass` directly.
+After the first successful run creates `pass`, you can remove `pass-visible` and keep the generated `pass` line. Push & Pull never removes `pass-visible` automatically. Without it, the existing `pass` is used unchanged. You can also supply an existing rclone `pass` directly.
 
 `pass-visible` contains your password as plain text. Keep `rclone.conf` private.
 
@@ -113,7 +121,7 @@ rclone.conf
 
 ### The `my-project` Destination
 
-RZilla sends project files to a destination named `my-project:`.
+Push & Pull sends project files to a destination named `my-project:`.
 
 The `my-project` alias in the example points to the folder where your project should be deployed:
 
@@ -133,7 +141,7 @@ You can choose any name for the real server connection, but the deploy alias mus
 
 Configure FTP, SFTP, WebDAV, Google Drive, S3, OneDrive or another [rclone storage backend](https://rclone.org/overview/) with the same wizard. Authentication and connection options vary by service; the `my-project` alias still points to your chosen destination.
 
-## 3. Use RZilla
+## 3. Use Push & Pull
 
 To upload a file or folder:
 
@@ -145,7 +153,7 @@ To download a file or folder:
 
 1. Select its local location in the project.
 2. Choose `Pull (Download)` or `Pull Folder (Download)`.
-3. RZilla downloads the matching path from `my-project:`.
+3. Push & Pull downloads the matching path from `my-project:`.
 
 ### Keyboard Shortcuts
 
@@ -167,7 +175,7 @@ This downloads the public content served at each URL for file downloads and comp
 
 ## Syncing Subfolders
 
-In VS Code or JetBrains IDEs, right-click a project subfolder and choose **Sync Folder (Bsyncs)** below Push and Pull. In JetBrains, it is also available under **Tools → RZilla**. It runs `rclone bisync` directly for that subfolder and its matching server path. The project root and individual files cannot be synced with this command. Read-only website mode is not supported.
+In VS Code or JetBrains IDEs, right-click a project subfolder and choose **Sync Folder (Bsyncs)** below Push and Pull. It runs `rclone bisync` directly for that subfolder and its matching server path. The project root and individual files cannot be synced with this command. Read-only website mode is not supported.
 
 **Sync propagates deletions in both directions.** It starts when selected, without a confirmation step, preview or automatic backup. Closing its notification does not cancel the transfer.
 
@@ -185,7 +193,7 @@ VS Code and JetBrains keep separate sync histories. Use one editor for a given f
 
 Open a local file and choose `Compare Online with Local`.
 
-RZilla downloads the matching online file to the editor's private storage and opens the built-in diff viewer:
+Push & Pull downloads the matching online file to the editor's private storage and opens the built-in diff viewer:
 
 - `Online` appears on the left.
 - `Local` appears on the right.
@@ -194,13 +202,13 @@ RZilla downloads the matching online file to the editor's private storage and op
 
 ## Finding the Project Configuration
 
-RZilla normally uses the `rclone.conf` in the project root.
+Push & Pull normally uses the `rclone.conf` in the project root.
 
-If the selected file belongs to a nested project, RZilla searches its parent folders for the nearest `rclone.conf`. This allows different projects to use different servers and deployment folders.
+If the selected file belongs to a nested project, Push & Pull searches its parent folders for the nearest `rclone.conf`. This allows different projects to use different servers and deployment folders.
 
 ## Transfer Settings
 
-Open your editor settings and search for `RZilla`.
+In VS Code, open Settings and search for `@ext:pa-andreas.push-pull` to find the Push & Pull settings.
 
 Available settings:
 
@@ -211,18 +219,18 @@ The default values are suitable for most servers. Higher values may make transfe
 
 ## Transfer Progress and Errors
 
-During an upload or download, RZilla shows the latest transfer information, including transferred size, percentage, speed, and estimated time when rclone provides them.
+During an upload or download, Push & Pull shows the latest transfer information, including transferred size, percentage, speed, and estimated time when rclone provides them.
 
 When the transfer finishes, you receive a completion notification. If it fails, the notification shows the latest useful error returned by rclone.
 
 ## Bug Reports and Feedback
 
-For bug reports, questions and feedback, open an issue on [GitHub Issues](https://github.com/libandreas/push-and-pull/issues).
+For bug reports, questions and feedback, open an issue on [GitHub Issues](https://github.com/libandreas/push-pull/issues).
 
 ## License
 
-RZilla is licensed under the [GNU General Public License](LICENSE), version 3 or any later version (GPL-3.0-or-later).
+Push & Pull is licensed under the [GNU General Public License](LICENSE), version 3 or any later version (GPL-3.0-or-later).
 
 ## Contributing
 
-Help improve RZilla on [GitHub](https://github.com/libandreas/push-and-pull). Report bugs, suggest features, improve the documentation or submit a pull request. Contributions for both the VS Code extension and the JetBrains plugin are welcome.
+Help improve Push & Pull on [GitHub](https://github.com/libandreas/push-pull). Report bugs, suggest features, improve the documentation or submit a pull request. Contributions for both the VS Code extension and the JetBrains plugin are welcome.

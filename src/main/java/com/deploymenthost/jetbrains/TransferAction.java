@@ -25,12 +25,11 @@ import java.util.Locale;
 import java.util.Set;
 
 abstract class TransferAction extends AnAction {
-    private static final String TITLE = "RZilla";
+    private static final String TITLE = "Push & Pull";
     private static final String NOTIFICATION_GROUP = "Push & Pull";
 
     private final Direction direction;
     private final Target target;
-    private final RcloneBinaryManager binaryManager = new RcloneBinaryManager();
     private final RcloneTransferService transferService = new RcloneTransferService();
     private final ReadOnlyTransferService readOnlyTransferService = new ReadOnlyTransferService();
 
@@ -141,7 +140,9 @@ abstract class TransferAction extends AnAction {
 
                 try {
                     reportProgress(indicator, liveNotification, "Checking rclone...");
-                    Path rclonePath = binaryManager.ensureRcloneAvailable();
+                    Path rclonePath = RcloneBinaryManager.ensureRcloneAvailable(
+                        message -> reportProgress(indicator, liveNotification, message)
+                    );
 
                     Set<Path> preparedConfigs = new HashSet<>();
                     for (RcloneTransferService.TransferItem item : items) {

@@ -1,4 +1,5 @@
 const path = require("path");
+const os = require("os");
 const fsPromises = require("fs/promises");
 const http = require("http");
 const https = require("https");
@@ -6,6 +7,7 @@ const { spawn, execFile } = require("child_process");
 const { promisify } = require("util");
 const vscode = require("vscode");
 const { createHash } = require("crypto");
+const AdmZip = require("adm-zip");
 
 const execFileAsync = promisify(execFile);
 
@@ -19,6 +21,7 @@ const BROWSER_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKi
 let extensionContext;
 let statusBarItem;
 let transferRunning = false;
+let rcloneReadyPromise;
 
 function activate(context) {
 	extensionContext = context;
@@ -66,7 +69,7 @@ function activate(context) {
 					title: "Bsyncs",
 					cancellable: false
 				}, async (progress) => {
-					const rclonePath = await ensureRcloneAvailable();
+					const rclonePath = await ensureRcloneAvailable(progress);
 					for (const item of [...new Map(items.map((item) => [item.configFile, item])).values()]) {
 						await makeRclonePasswd(rclonePath, item.rootPath, item.configFile);
 					}
@@ -135,7 +138,7 @@ async function compareFile(uri) {
 		}, async (progress) => {
 			progress.report({ message: "Downloading online version..." });
 
-			const rclonePath = await ensureRcloneAvailable();
+			const rclonePath = await ensureRcloneAvailable(progress);
 			await makeRclonePasswd(rclonePath, transferRoot.rootPath, transferRoot.configFile);
 
 			const storageUri = extensionContext.storageUri || extensionContext.globalStorageUri;
@@ -263,7 +266,7 @@ async function runRcloneMany(action, uri, selectedUris, expectedType = vscode.Fi
 				setStatusBar(action === "upload" ? "$(arrow-up) Uploading..." : "$(arrow-down) Downloading...");
 				progress.report({ message: "Checking rclone..." });
 
-				const rclonePath = await ensureRcloneAvailable();
+				const rclonePath = await ensureRcloneAvailable(progress);
 				const transferRoots = [...new Map(items.map((item) => [item.configFile, item])).values()];
 
 				for (const item of transferRoots) {
@@ -902,16 +905,105 @@ async function runRcloneCommand({ rclonePath, args, cwd, progress, action, itemL
 	});
 }
 
-async function ensureRcloneAvailable() {
-	try {
-		await execFileAsync("rclone", ["version"], { windowsHide: true });
-	} catch (error) {
-		if (error.code === "ENOENT") {
-			throw new Error("rclone not found. Please install rclone first on your system.");
-		}
-		throw error;
+async function ensureRcloneAvailable(progress) {
+	if (!rcloneReadyPromise) {
+		rcloneReadyPromise = installRclone(progress).finally(() => {
+			rcloneReadyPromise = undefined;
+		});
 	}
-	return "rclone";
+	return rcloneReadyPromise;
+}
+
+async function installRclone(progress) {
+	const platforms = { win32: "windows", darwin: "osx", sunos: "solaris" };
+	const platform = platforms[process.platform] || process.platform;
+	const architectures = { x64: "amd64", ia32: "386", mipsel: "mipsle", mips64el: "mips64le" };
+	let architecture = architectures[process.arch] || process.arch;
+	const machine = os.machine().toLowerCase();
+	if (architecture === "arm" && /armv[67]/.test(machine)) {
+		architecture = machine.includes("armv7") ? "arm-v7" : "arm-v6";
+	}
+	if (architecture === "ppc64" && machine.includes("ppc64le")) {
+		architecture = "ppc64le";
+	}
+	const supported = {
+		windows: ["amd64", "386", "arm64"],
+		osx: ["amd64", "arm64"],
+		linux: ["amd64", "386", "arm64", "arm", "arm-v6", "arm-v7", "loong64", "ppc64", "ppc64le", "riscv64", "s390x", "mips", "mipsle", "mips64", "mips64le"],
+		freebsd: ["amd64", "386", "arm", "arm-v6", "arm-v7"],
+		openbsd: ["amd64", "386"],
+		netbsd: ["amd64", "386", "arm", "arm-v6", "arm-v7"],
+		solaris: ["amd64"],
+		aix: ["ppc64"]
+	};
+	if (!supported[platform]?.includes(architecture)) {
+		throw new Error(`No official rclone download mapping is configured for platform ${platform} ${architecture}.`);
+	}
+
+	const storageDir = path.join(extensionContext.globalStorageUri.fsPath, "rclone");
+	const binaryName = platform === "windows" ? "rclone.exe" : "rclone";
+	const executablePath = path.join(storageDir, binaryName);
+	if (!await fileExists(executablePath)) {
+		await fsPromises.mkdir(storageDir, { recursive: true });
+		progress.report({ message: "Downloading rclone..." });
+		const archive = await downloadRcloneArchive(new URL(`https://downloads.rclone.org/rclone-current-${platform}-${architecture}.zip`), progress);
+		progress.report({ message: "Extracting rclone..." });
+		const entry = new AdmZip(archive).getEntries().find((item) => !item.isDirectory && path.posix.basename(item.entryName) === binaryName);
+		if (!entry) {
+			throw new Error("Could not find the rclone binary inside the downloaded archive.");
+		}
+		const temporaryPath = path.join(storageDir, platform === "windows" ? "rclone.new.exe" : "rclone.new");
+		try {
+			await fsPromises.writeFile(temporaryPath, entry.getData());
+			if (process.platform !== "win32") {
+				await fsPromises.chmod(temporaryPath, 0o755);
+			}
+			await execFileAsync(temporaryPath, ["version"], { windowsHide: true });
+			await fsPromises.rename(temporaryPath, executablePath);
+		} finally {
+			await fsPromises.rm(temporaryPath, { force: true });
+		}
+	} else {
+		await execFileAsync(executablePath, ["version"], { windowsHide: true });
+	}
+	return executablePath;
+}
+
+async function downloadRcloneArchive(url, progress, redirectCount = 0) {
+	if (redirectCount > 10) {
+		throw new Error("rclone download failed: too many redirects.");
+	}
+	return new Promise((resolve, reject) => {
+		const request = https.get(url, {
+			timeout: 30000,
+			headers: { "User-Agent": "push-and-pull-vscode-extension" }
+		}, (response) => {
+			if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+				response.resume();
+				downloadRcloneArchive(new URL(response.headers.location, url), progress, redirectCount + 1).then(resolve, reject);
+				return;
+			}
+			if (response.statusCode !== 200) {
+				response.resume();
+				reject(new Error(`rclone download failed with status ${response.statusCode}.`));
+				return;
+			}
+			const chunks = [];
+			const totalBytes = Number(response.headers["content-length"] || 0);
+			let downloadedBytes = 0;
+			response.on("data", (chunk) => {
+				chunks.push(chunk);
+				downloadedBytes += chunk.length;
+				const amount = totalBytes > 0 ? `${Math.round(downloadedBytes * 100 / totalBytes)}%` : formatBytes(downloadedBytes);
+				progress.report({ message: `Downloading rclone... ${amount}` });
+			});
+			response.on("end", () => resolve(Buffer.concat(chunks)));
+			response.on("aborted", () => reject(new Error("rclone download was interrupted.")));
+			response.on("error", reject);
+		});
+		request.on("timeout", () => request.destroy(new Error("rclone download timed out.")));
+		request.on("error", reject);
+	});
 }
 
 async function requestReadOnlyFile(url, progress, itemLabel, redirectCount = 0) {

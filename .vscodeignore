@@ -2,6 +2,7 @@
 **/tests/**
 **/test-files/**
 **/tools/**
+**/build-*.js
 **/*.zip
 **/*.vsix
 **/.gradle/**
@@ -16,7 +17,6 @@ build/**
 **/.codex
 **/.codex/**
 **/.skia/**
-**/node_modules/** (Only Chrome Extension)
 **/.codex-remote-attachments/**
 **/.vscode/**
 **/.idea/**
@@ -29,4 +29,41 @@ build/**
 **/build-*.mjs
 **/build-*.ps1
 **/rclone.conf
-models-v3/omnilingual-300m-v2-int8/model.data
+# IDE workers download models and ONNX runtimes from Hugging Face and jsDelivr.
+models-v3/**
+wasm/**
+transformers-wasm/**
+
+# Chrome and PWA files
+manifest.json
+manifest.webmanifest
+service-worker.js
+service-worker-pwa.js
+common/pwa-install.js
+common/pwa-install.css
+www/camera.html
+www/camera.js
+www/camera.css
+www/huggingface-browser.js
+www/offscreen.html
+www/offscreen.js
+www/tab.js
+www/tasks-load.js
+www/tasks.js
+favicon-1-big-oxi.png
+favicon-128-128-1.png
+favicon-128-128.png
+favicon-192-1.png
+favicon-512-1.png
+favicon-512.png
+favicon-big.png
+favicon-chrome-1-old.png
+favicon-chrome-1.png
+favicon-chrome-2.png
+.chromeignore
+
+# Disabled features retained as source
+www/ai-background.js
+www/offscreen-chat.js
+
+

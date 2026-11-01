@@ -13,7 +13,7 @@ plugins {
 }
 
 group = "com.deploymenthost"
-version = "26.10.18"
+version = "26.10.24"
 
 val userProfile = System.getenv("USERPROFILE") ?: System.getProperty("user.home")
 val localProjectBuildRoot = file("$userProfile/ceres-assistant-build - Push & Pull")
@@ -45,12 +45,7 @@ intellijPlatform {
     sandboxContainer.set(localProjectBuildRoot.resolve("sandbox"))
 
     pluginConfiguration {
-        name = providers.fileContents(layout.projectDirectory.file("package.json")).asText.map { json ->
-            val metadata = groovy.json.JsonSlurper().parseText(json) as Map<*, *>
-            val displayName = metadata["displayName"] as String
-            require(displayName.isNotBlank()) { "package.json displayName must not be blank." }
-            displayName
-        }
+        name = "Push & Pull: FTP & SFTP File Transfer"
         version = project.version.toString()
         description = marketplaceReadme.map { markdown ->
             val document = org.commonmark.parser.Parser.builder().build().parse(markdown)

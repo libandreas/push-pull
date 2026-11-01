@@ -1,13 +1,14 @@
 {
-	"name": "push-and-pull",
-	"displayName": "RZilla: FTP, SFTP & WebDAV",
+	"name": "push-pull",
+	"displayName": "Push & Pull: FTP & SFTP File Transfer",
 	"description": "FTP, SFTP and WebDAV client for VS Code. Upload, download, sync folders and compare local and remote files. Powered by rclone.",
 	"keywords": [
-		"ftp",
 		"sftp",
+		"ftp",
 		"ftps",
 		"webdav",
-		"rclone",
+		"sync",
+		"file-sync",
 		"upload",
 		"download",
 		"deploy",
@@ -16,22 +17,19 @@
 		"remote",
 		"compare",
 		"diff",
-		"s3",
-		"smb",
-		"cloud",
-		"google-drive",
-		"onedrive"
+		"rclone",
+		"s3"
 	],
-	"version": "26.10.26",
+	"version": "26.11.3",
 	"publisher": "pa-andreas",
 	"license": "GPL-3.0-or-later",
 	"bugs": {
-		"url": "https://github.com/libandreas/push-and-pull/issues"
+		"url": "https://github.com/libandreas/push-pull/issues"
 	},
 	"icon": "favicon-4.png",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/libandreas/push-and-pull.git"
+		"url": "https://github.com/libandreas/push-pull.git"
 	},
 	"scripts": {
 		"build:vscode": "node build-vscode.mjs",
@@ -52,21 +50,24 @@
 		"onCommand:pushR.syncFolder"
 	],
 	"main": "./extension-4.js",
+	"dependencies": {
+		"adm-zip": "^0.5.16"
+	},
 	"contributes": {
 		"configuration": {
-			"title": "RZilla",
+			"title": "Push & Pull",
 			"properties": {
 				"pushPull.transfers": {
 					"type": "number",
 					"default": 2,
 					"minimum": 1,
-					"description": "RZilla rclone arg: --transfers. Number of file transfers to run in parallel."
+					"description": "Push & Pull rclone arg: --transfers. Number of file transfers to run in parallel."
 				},
 				"pushPull.checkers": {
 					"type": "number",
 					"default": 4,
 					"minimum": 1,
-					"description": "RZilla rclone arg: --checkers. Number of checkers to run in parallel while scanning and comparing files."
+					"description": "Push & Pull rclone arg: --checkers. Number of checkers to run in parallel while scanning and comparing files."
 				}
 			}
 		},
@@ -215,5 +216,8 @@
 				}
 			]
 		}
+	},
+	"devDependencies": {
+		"@vscode/vsce": "^4.1.0"
 	}
 }
