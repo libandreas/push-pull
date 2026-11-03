@@ -1,6 +1,8 @@
 # Public repository files.
 .vscode
 .idea
+.gradle/
+.env
 rclone.conf
 .skia/
 .well-known/

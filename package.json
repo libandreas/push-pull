@@ -20,7 +20,7 @@
 		"rclone",
 		"s3"
 	],
-	"version": "26.11.3",
+	"version": "26.11.4",
 	"publisher": "pa-andreas",
 	"license": "GPL-3.0-or-later",
 	"bugs": {

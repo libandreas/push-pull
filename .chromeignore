@@ -1,5 +1,7 @@
 **/test/**
 **/tests/**
+**/.env
+**/.env.*
 **/test-files/**
 **/tools/**
 **/build-*.js

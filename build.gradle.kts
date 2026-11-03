@@ -13,7 +13,7 @@ plugins {
 }
 
 group = "com.deploymenthost"
-version = "26.10.24"
+version = "26.11.0"
 
 val userProfile = System.getenv("USERPROFILE") ?: System.getProperty("user.home")
 val localProjectBuildRoot = file("$userProfile/ceres-assistant-build - Push & Pull")

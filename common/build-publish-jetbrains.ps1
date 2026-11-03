@@ -4,9 +4,14 @@ $ErrorActionPreference = 'Stop'
 if ($args.Count -gt 0) { throw 'Place this script in the target project root or its common folder and run it without arguments.' }
 $ProjectRoot = if ((Split-Path -Leaf $PSScriptRoot) -ieq 'common') { Split-Path -Parent $PSScriptRoot } else { $PSScriptRoot }
 $Project = Get-Item -LiteralPath $ProjectRoot
-# Optional Marketplace credentials. Without a token, packages are only built and saved.
-$PublishToken = $env:JETBRAINS_TOKEN
-$PublishChannel = $env:JETBRAINS_CHANNEL
+# Root .env: JETBRAINS_TOKEN is required; an empty JETBRAINS_CHANNEL publishes to Stable.
+# Replace a revoked token at https://plugins.jetbrains.com/author/me/tokens and update each root .env.
+$EnvPath = Join-Path $ProjectRoot '.env'
+$CredentialsJson = & node -e 'process.loadEnvFile(process.argv[1]); process.stdout.write(JSON.stringify({token: process.env.JETBRAINS_TOKEN, channel: process.env.JETBRAINS_CHANNEL}));' $EnvPath
+if ($LASTEXITCODE -ne 0) { throw "Could not load root .env | file=$EnvPath" }
+$Credentials = $CredentialsJson | ConvertFrom-Json
+$PublishToken = [string]$Credentials.token
+$PublishChannel = [string]$Credentials.channel
 $Utf8 = [System.Text.UTF8Encoding]::new($false)
 
 function Test-JavaHome {
@@ -118,7 +123,7 @@ try {
         Write-Host "Package saved | output=$OutputPath"
 
         if ([string]::IsNullOrWhiteSpace($PublishToken)) {
-            Write-Host "Publish skipped | project=$($Project.Name) | missing=JETBRAINS_TOKEN | package=$OutputPath"
+            Write-Host "Publish skipped | missing=JETBRAINS_TOKEN | package=$OutputPath"
             exit 0
         }
 
@@ -133,6 +138,21 @@ try {
         $Multipart = [System.Net.Http.MultipartFormDataContent]::new()
         $Response = $null
         try {
+            Write-Host "Checking Marketplace listing | plugin=$PluginXmlId"
+            $ListingUrl = 'https://plugins.jetbrains.com/api/plugins/intellij/' + [Uri]::EscapeDataString($PluginXmlId)
+            $ListingResponse = $Client.GetAsync($ListingUrl).GetAwaiter().GetResult()
+            try {
+                if ([int]$ListingResponse.StatusCode -eq 404) {
+                    Write-Host "Upload skipped | No accessible initial Marketplace listing was found. Create it first. | plugin=$PluginXmlId | package=$OutputPath"
+                    exit 0
+                }
+                $ListingText = $ListingResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+                if (-not $ListingResponse.IsSuccessStatusCode) { throw "Marketplace listing check failed | HTTP=$([int]$ListingResponse.StatusCode) | response=$ListingText" }
+                $Listing = $ListingText | ConvertFrom-Json
+                if ($Listing.xmlId -ne $PluginXmlId -or -not $Listing.id) { throw "Marketplace listing ID does not match | plugin=$PluginXmlId" }
+            } finally {
+                $ListingResponse.Dispose()
+            }
             $Multipart.Add([System.Net.Http.StringContent]::new($PluginXmlId), 'xmlId')
             if (-not [string]::IsNullOrWhiteSpace($PublishChannel)) {
                 $Multipart.Add([System.Net.Http.StringContent]::new($PublishChannel), 'channel')
