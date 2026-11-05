@@ -61,7 +61,7 @@
 					"type": "number",
 					"default": 2,
 					"minimum": 1,
-					"description": "Push & Pull rclone arg: --transfers. Number of file transfers to run in parallel."
+					"description": "Files transferred in parallel within each folder upload, download or sync."
 				},
 				"pushPull.checkers": {
 					"type": "number",

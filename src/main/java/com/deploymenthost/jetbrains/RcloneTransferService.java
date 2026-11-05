@@ -10,6 +10,7 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -33,11 +34,13 @@ final class RcloneTransferService {
     );
 
     void prepareConfig(Path rclonePath, TransferItem item) throws IOException, InterruptedException {
-        resolveRcloneRemoteType(
-            parseRcloneConfig(Files.readString(item.configPath(), StandardCharsets.UTF_8)),
-            "my-project"
-        );
-        makeRclonePassword(rclonePath, item.rootPath(), item.configPath());
+        synchronized (RcloneTransferService.class) {
+            resolveRcloneRemoteType(
+                parseRcloneConfig(Files.readString(item.configPath(), StandardCharsets.UTF_8)),
+                "my-project"
+            );
+            makeRclonePassword(rclonePath, item.rootPath(), item.configPath());
+        }
     }
 
     TransferItem resolveTransferItem(VirtualFile file) {
@@ -132,7 +135,7 @@ final class RcloneTransferService {
         if (item.rootPath().resolve(item.relativePath()).getFileName().toString().equalsIgnoreCase("rclone.conf")) {
             throw new IllegalStateException("rclone.conf is private and cannot be transferred.");
         }
-        List<String> defaultArguments = defaultArguments(item.configPath(), transfers, checkers);
+        List<String> defaultArguments = defaultArguments(item.configPath(), item.directory() ? Math.max(1, transfers) : 0, checkers);
         List<String> arguments = direction == TransferAction.Direction.UPLOAD
             ? uploadArguments(item, defaultArguments)
             : downloadArguments(item, defaultArguments);
@@ -187,8 +190,10 @@ final class RcloneTransferService {
             arguments.add("--ignore-times");
         }
 
-        arguments.add("--transfers");
-        arguments.add(String.valueOf(Math.max(1, transfers)));
+        if (transfers > 0) {
+            arguments.add("--transfers");
+            arguments.add(String.valueOf(transfers));
+        }
         arguments.add("--checkers");
         arguments.add(String.valueOf(Math.max(1, checkers)));
         return arguments;
@@ -243,7 +248,13 @@ final class RcloneTransferService {
         }
 
         if (changed) {
-            Files.writeString(configPath, String.join(newline, lines), StandardCharsets.UTF_8);
+            Path temporaryConfig = Files.createTempFile(configPath.toAbsolutePath().getParent(), ".rclone-", ".tmp");
+            try {
+                Files.writeString(temporaryConfig, String.join(newline, lines), StandardCharsets.UTF_8);
+                Files.move(temporaryConfig, configPath, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            } finally {
+                Files.deleteIfExists(temporaryConfig);
+            }
         }
     }
 

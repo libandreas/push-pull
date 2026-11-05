@@ -20,7 +20,8 @@ const BROWSER_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKi
 
 let extensionContext;
 let statusBarItem;
-let transferRunning = false;
+let activeTransfers = 0;
+const configPreparations = new Map();
 let rcloneReadyPromise;
 
 function activate(context) {
@@ -44,11 +45,7 @@ function activate(context) {
 			runRcloneMany("download", uri, selectedUris, vscode.FileType.Directory);
 		}),
 		vscode.commands.registerCommand("pushR.syncFolder", async (uri, selectedUris) => {
-			if (transferRunning) {
-				vscode.window.showWarningMessage("Wait for the current transfer to finish.");
-				return;
-			}
-			transferRunning = true;
+			activeTransfers += 1;
 			try {
 				const items = [];
 				for (const folderUri of getSelectedFileUris(uri, selectedUris)) {
@@ -99,7 +96,7 @@ function activate(context) {
 			} catch (error) {
 				vscode.window.showErrorMessage(`Bsyncs stopped: ${error.message}`);
 			} finally {
-				transferRunning = false;
+				activeTransfers -= 1;
 				clearStatusBar();
 			}
 		})
@@ -202,11 +199,7 @@ async function compareReadOnlyFile(localUri, source) {
 }
 
 async function runRcloneMany(action, uri, selectedUris, expectedType = vscode.FileType.File) {
-	if (transferRunning) {
-		vscode.window.showWarningMessage("Wait for the current transfer to finish.");
-		return;
-	}
-	transferRunning = true;
+	activeTransfers += 1;
 	try {
 		const itemUris = getSelectedFileUris(uri, selectedUris);
 		if (itemUris.some((itemUri) => path.basename(itemUri.fsPath).toLowerCase() === "rclone.conf")) {
@@ -274,8 +267,7 @@ async function runRcloneMany(action, uri, selectedUris, expectedType = vscode.Fi
 					await makeRclonePasswd(rclonePath, item.rootPath, item.configFile);
 				}
 
-				for (let index = 0; index < items.length; index += 1) {
-					const item = items[index];
+				const results = await Promise.allSettled(items.map(async (item, index) => {
 					const itemLabel = items.length > 1
 						? `${index + 1}/${items.length} ${item.relativePath}`
 						: item.relativePath;
@@ -292,7 +284,10 @@ async function runRcloneMany(action, uri, selectedUris, expectedType = vscode.Fi
 						progress,
 						rclonePath
 					});
-				}
+				}));
+				const failures = results.flatMap((result, index) => result.status === "rejected"
+					? [`${items[index].relativePath}: ${result.reason.message}`] : []);
+				if (failures.length) throw new Error(failures.join("\n"));
 
 				progress.report({
 					message: action === "upload" ? "Upload finished." : "Download finished."
@@ -312,7 +307,8 @@ async function runRcloneMany(action, uri, selectedUris, expectedType = vscode.Fi
 			`${action === "upload" ? "Upload" : "Download"} failed: ${error.message}`
 		);
 	} finally {
-		transferRunning = false;
+		activeTransfers -= 1;
+		clearStatusBar();
 	}
 }
 
@@ -346,8 +342,7 @@ async function runReadOnlyDownload(itemUris, expectedType) {
 		setStatusBar("$(arrow-down) Downloading via HTTP...");
 
 		try {
-			for (let index = 0; index < itemUris.length; index += 1) {
-				const source = sources[index];
+			const results = await Promise.allSettled(sources.map(async (source, index) => {
 				const itemLabel = itemUris.length > 1
 					? `${index + 1}/${itemUris.length} ${source.relativePath}`
 					: source.relativePath;
@@ -355,7 +350,10 @@ async function runReadOnlyDownload(itemUris, expectedType) {
 				progress.report({ message: `Downloading via HTTP: ${itemLabel}` });
 				const body = await requestReadOnlyFile(source.url, progress, itemLabel);
 				await vscode.workspace.fs.writeFile(itemUris[index], body);
-			}
+			}));
+			const failures = results.flatMap((result, index) => result.status === "rejected"
+				? [`${sources[index].relativePath}: ${result.reason.message}`] : []);
+			if (failures.length) throw new Error(failures.join("\n"));
 
 			progress.report({ message: "Download finished." });
 			vscode.window.showInformationMessage("Read-only download finished.");
@@ -502,6 +500,18 @@ async function findRcloneRoot(itemPath, resourceType) {
 }
 
 async function makeRclonePasswd(rclonePath, rootPath, configFile) {
+	const key = path.resolve(configFile);
+	if (configPreparations.has(key)) return configPreparations.get(key);
+	const preparation = writeRclonePassword(rclonePath, rootPath, configFile);
+	configPreparations.set(key, preparation);
+	try {
+		await preparation;
+	} finally {
+		configPreparations.delete(key);
+	}
+}
+
+async function writeRclonePassword(rclonePath, rootPath, configFile) {
 	let text;
 
 	try {
@@ -546,7 +556,13 @@ async function makeRclonePasswd(rclonePath, rootPath, configFile) {
 	}
 
 	if (changed) {
-		await fsPromises.writeFile(configFile, lines.join(newline), "utf8");
+		const temporaryConfig = `${configFile}.${process.pid}.${Date.now()}.tmp`;
+		try {
+			await fsPromises.writeFile(temporaryConfig, lines.join(newline), "utf8");
+			await fsPromises.rename(temporaryConfig, configFile);
+		} finally {
+			await fsPromises.rm(temporaryConfig, { force: true });
+		}
 	}
 }
 
@@ -588,7 +604,7 @@ async function obscureRclonePassword(rclonePath, password, cwd) {
 }
 
 async function runTransfer({ action, expectedType, item, itemLabel, progress, rclonePath }) {
-	const rcloneArgs = await getDefaultRcloneArgs(item.configFile);
+	const rcloneArgs = await getDefaultRcloneArgs(item.configFile, expectedType === vscode.FileType.Directory);
 	const args = action === "upload"
 		? buildUploadArgs(item.rootPath, item.configFile, item.relativePath, expectedType, rcloneArgs)
 		: buildDownloadArgs(item.rootPath, item.configFile, item.relativePath, expectedType, rcloneArgs);
@@ -669,7 +685,7 @@ function joinRemotePath(remoteRoot, relativePath) {
 	return `${remoteRoot}/${cleanPath}`;
 }
 
-async function getDefaultRcloneArgs(configFile) {
+async function getDefaultRcloneArgs(configFile, directory = false) {
 	const config = vscode.workspace.getConfiguration("pushPull");
 	const transfers = Math.max(1, Number(config.get("transfers", 2)) || 2);
 	const checkers = Math.max(1, Number(config.get("checkers", 4)) || 4);
@@ -687,8 +703,7 @@ async function getDefaultRcloneArgs(configFile) {
 
 	return [
 		...args,
-		"--transfers",
-		String(transfers),
+		...(directory ? ["--transfers", String(transfers)] : []),
 		"--checkers",
 		String(checkers)
 	];
@@ -1137,11 +1152,15 @@ function formatBytes(value) {
 }
 
 function setStatusBar(text) {
-	statusBarItem.text = text;
+	statusBarItem.text = activeTransfers > 1 ? `$(sync) ${activeTransfers} transfers` : text;
 	statusBarItem.show();
 }
 
 function clearStatusBar() {
+	if (activeTransfers > 0) {
+		setStatusBar(`$(sync) ${activeTransfers} transfers`);
+		return;
+	}
 	statusBarItem.hide();
 }
 

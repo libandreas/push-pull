@@ -128,6 +128,12 @@ abstract class TransferAction extends AnAction {
             );
         }
 
+        for (int index = 0; index < items.size(); index++) {
+            startTransfer(project, List.of(items.get(index)), List.of(selectedFiles.get(index)));
+        }
+    }
+
+    private void startTransfer(Project project, List<RcloneTransferService.TransferItem> items, List<VirtualFile> selectedFiles) {
         Notification liveNotification = NotificationGroupManager.getInstance()
             .getNotificationGroup(NOTIFICATION_GROUP)
             .createNotification(TITLE, "Checking rclone...", NotificationType.INFORMATION);
@@ -258,6 +264,13 @@ abstract class TransferAction extends AnAction {
             return true;
         }
 
+        for (int index = 0; index < selectedFiles.size(); index++) {
+            startReadOnlyDownload(project, List.of(selectedFiles.get(index)), List.of(sources.get(index)));
+        }
+        return true;
+    }
+
+    private void startReadOnlyDownload(Project project, List<VirtualFile> selectedFiles, List<ReadOnlyTransferService.ReadOnlySource> sources) {
         Notification liveNotification = NotificationGroupManager.getInstance()
             .getNotificationGroup(NOTIFICATION_GROUP)
             .createNotification(TITLE, "Downloading via HTTP", NotificationType.INFORMATION);
@@ -305,8 +318,6 @@ abstract class TransferAction extends AnAction {
                 }
             }
         }.queue();
-
-        return true;
     }
 
     private List<VirtualFile> selectedFiles(AnActionEvent event) {

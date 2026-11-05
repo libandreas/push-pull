@@ -48,7 +48,7 @@ public final class PushPullConfigurable implements Configurable {
 
         labelConstraints.gridy = 0;
         inputConstraints.gridy = 0;
-        panel.add(new JLabel("Transfers"), labelConstraints);
+        panel.add(new JLabel("Folder transfers"), labelConstraints);
         panel.add(transfersInput, inputConstraints);
 
         labelConstraints.gridy = 1;
