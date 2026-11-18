@@ -1,4 +1,7 @@
 **/test/**
+# Maintenance scripts are not extension assets.
+common/backup.mjs
+**/*.php
 **/tests/**
 **/test-files/**
 **/tools/**
@@ -29,7 +32,7 @@ build/**
 **/build-*.mjs
 **/build-*.ps1
 **/rclone.conf
-# IDE workers download models and ONNX runtimes from Hugging Face and jsDelivr.
+# Local AI features are available in the Chrome extension and desktop app.
 models-v3/**
 wasm/**
 transformers-wasm/**

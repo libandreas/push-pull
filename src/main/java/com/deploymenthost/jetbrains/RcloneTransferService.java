@@ -228,6 +228,10 @@ final class RcloneTransferService {
             }
 
             String visiblePassword = lines.get(visibleIndex).replaceFirst("^\\s*pass-visible\\s*=\\s*", "");
+            if (visiblePassword.isEmpty()) {
+                continue;
+            }
+
             String obscuredPassword = obscureRclonePassword(rclonePath, visiblePassword, rootPath);
             String indentation = leadingWhitespace(lines.get(visibleIndex));
 

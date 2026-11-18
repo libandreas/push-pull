@@ -540,6 +540,10 @@ async function writeRclonePassword(rclonePath, rootPath, configFile) {
 		}
 
 		const visiblePassword = lines[visibleIndex].replace(/^\s*pass-visible\s*=\s*/, "");
+		if (visiblePassword === "") {
+			continue;
+		}
+
 		const obscuredPassword = await obscureRclonePassword(rclonePath, visiblePassword, rootPath);
 		const indent = lines[visibleIndex].match(/^(\s*)/)?.[1] || "";
 
